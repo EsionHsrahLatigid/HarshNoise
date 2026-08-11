@@ -1,0 +1,127 @@
+cmake_minimum_required(VERSION 3.22)
+
+project(HarshNoise VERSION 1.0.0 LANGUAGES C CXX)
+
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
+
+option(HARSHNOISE_BUILD_PLUGIN "Build the JUCE plug-in targets" ON)
+option(HARSHNOISE_BUILD_TESTS "Build plug-in smoke tests" ON)
+set(HARSHNOISE_ARTIFACT_DIR "${CMAKE_CURRENT_SOURCE_DIR}/artifacts" CACHE PATH
+    "Directory for final VST3, AU, and Standalone products")
+
+if(HARSHNOISE_BUILD_PLUGIN)
+    include(FetchContent)
+
+    if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/JUCE/CMakeLists.txt")
+        add_subdirectory(JUCE)
+    else()
+        FetchContent_Declare(
+            JUCE
+            GIT_REPOSITORY https://github.com/juce-framework/JUCE.git
+            GIT_TAG 8.0.15
+            GIT_SHALLOW TRUE)
+        FetchContent_MakeAvailable(JUCE)
+    endif()
+
+    set(HARSHNOISE_FORMATS VST3 Standalone)
+    if(APPLE)
+        list(APPEND HARSHNOISE_FORMATS AU)
+    endif()
+
+juce_add_plugin(HarshNoise
+    VERSION ${PROJECT_VERSION}
+    COMPANY_NAME "EsionHsrahLatigid"
+    BUNDLE_ID "jp.ehl.harshnoise"
+    PRODUCT_NAME "HarshNoise"
+    DESCRIPTION "Brutal digital harsh noise generator"
+    IS_SYNTH FALSE
+    NEEDS_MIDI_INPUT FALSE
+    NEEDS_MIDI_OUTPUT FALSE
+    IS_MIDI_EFFECT FALSE
+    EDITOR_WANTS_KEYBOARD_FOCUS FALSE
+    COPY_PLUGIN_AFTER_BUILD FALSE
+    PLUGIN_MANUFACTURER_CODE EHL_
+    PLUGIN_CODE Hrsh
+    FORMATS ${HARSHNOISE_FORMATS}
+    VST3_CATEGORIES "Fx" "Distortion"
+    AU_MAIN_TYPE "kAudioUnitType_Effect"
+)
+
+juce_generate_juce_header(HarshNoise)
+
+target_sources(HarshNoise
+    PRIVATE
+        src/PluginEditor.cpp
+        src/PluginEditor.h
+        src/PluginProcessor.cpp
+        src/PluginProcessor.h)
+
+target_compile_definitions(HarshNoise
+    PUBLIC
+        JUCE_WEB_BROWSER=0
+        JUCE_USE_CURL=0
+        JUCE_VST3_CAN_REPLACE_VST2=0
+        JUCE_DISPLAY_SPLASH_SCREEN=0
+)
+
+target_link_libraries(HarshNoise
+    PRIVATE
+        juce::juce_audio_utils
+        juce::juce_dsp
+    PUBLIC
+        juce::juce_recommended_config_flags
+        juce::juce_recommended_lto_flags
+        juce::juce_recommended_warning_flags
+)
+
+    set(harshnoise_juce_products "${CMAKE_CURRENT_BINARY_DIR}/HarshNoise_artefacts/$<CONFIG>")
+    set(harshnoise_staged_products "${HARSHNOISE_ARTIFACT_DIR}/$<CONFIG>")
+    set(harshnoise_artifact_dependencies HarshNoise_VST3 HarshNoise_Standalone)
+    set(harshnoise_artifact_commands
+        COMMAND ${CMAKE_COMMAND} -E make_directory "${harshnoise_staged_products}"
+        COMMAND ${CMAKE_COMMAND} -E remove_directory "${harshnoise_staged_products}/VST3"
+        COMMAND ${CMAKE_COMMAND} -E remove_directory "${harshnoise_staged_products}/Standalone"
+        COMMAND ${CMAKE_COMMAND} -E copy_directory
+                "${harshnoise_juce_products}/VST3" "${harshnoise_staged_products}/VST3"
+        COMMAND ${CMAKE_COMMAND} -E copy_directory
+                "${harshnoise_juce_products}/Standalone" "${harshnoise_staged_products}/Standalone")
+
+    if(TARGET HarshNoise_AU)
+        list(APPEND harshnoise_artifact_dependencies HarshNoise_AU)
+        list(APPEND harshnoise_artifact_commands
+            COMMAND ${CMAKE_COMMAND} -E remove_directory "${harshnoise_staged_products}/AU"
+            COMMAND ${CMAKE_COMMAND} -E copy_directory
+                    "${harshnoise_juce_products}/AU" "${harshnoise_staged_products}/AU")
+    endif()
+
+    if(APPLE)
+        list(APPEND harshnoise_artifact_commands
+            COMMAND codesign --force --deep --sign -
+                    "${harshnoise_staged_products}/VST3/HarshNoise.vst3"
+            COMMAND codesign --force --deep --sign -
+                    "${harshnoise_staged_products}/Standalone/HarshNoise.app")
+        if(TARGET HarshNoise_AU)
+            list(APPEND harshnoise_artifact_commands
+                COMMAND codesign --force --deep --sign -
+                        "${harshnoise_staged_products}/AU/HarshNoise.component")
+        endif()
+    endif()
+
+    add_custom_target(HarshNoise_Artifacts
+        ${harshnoise_artifact_commands}
+        DEPENDS ${harshnoise_artifact_dependencies}
+        COMMENT "Staging HarshNoise products in ${HARSHNOISE_ARTIFACT_DIR}/$<CONFIG>")
+
+    if(HARSHNOISE_BUILD_TESTS)
+        enable_testing()
+        add_executable(HarshNoiseSmokeTests Tests/SmokeTests.cpp)
+        target_include_directories(HarshNoiseSmokeTests
+            PRIVATE
+                src
+                "${CMAKE_CURRENT_BINARY_DIR}/HarshNoise_artefacts/JuceLibraryCode")
+        target_link_libraries(HarshNoiseSmokeTests PRIVATE HarshNoise juce::juce_audio_utils)
+        add_test(NAME HarshNoiseSmokeTests COMMAND HarshNoiseSmokeTests)
+    endif()
+endif()
