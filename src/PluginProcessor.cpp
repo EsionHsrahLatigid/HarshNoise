@@ -2,6 +2,29 @@
 #include "PluginEditor.h"
 #include <cmath>
 
+namespace
+{
+float sanitizeAudioSample(float value)
+{
+    if (!std::isfinite(value))
+        return 0.0f;
+
+    return std::clamp(value, -16.0f, 16.0f);
+}
+
+float foldToUnitRange(float value)
+{
+    if (!std::isfinite(value))
+        return 0.0f;
+
+    float folded = std::fmod(value + 1.0f, 4.0f);
+    if (folded < 0.0f)
+        folded += 4.0f;
+
+    return folded <= 2.0f ? folded - 1.0f : 3.0f - folded;
+}
+}
+
 //==============================================================================
 HarshNoiseAudioProcessor::HarshNoiseAudioProcessor()
     : AudioProcessor(BusesProperties()
@@ -172,6 +195,9 @@ bool HarshNoiseAudioProcessor::isBusesLayoutSupported(const BusesLayout& layouts
 
 float HarshNoiseAudioProcessor::bitCrush(float input, float bits)
 {
+    input = sanitizeAudioSample(input);
+    bits = std::clamp(std::isfinite(bits) ? bits : 8.0f, 1.0f, 16.0f);
+
     // Quantize to specified bit depth
     // Lower bits = more aggressive quantization noise
     const float levels = std::pow(2.0f, bits);
@@ -192,6 +218,8 @@ float HarshNoiseAudioProcessor::bitCrush(float input, float bits)
 
 float HarshNoiseAudioProcessor::downsample(float input, int channel, int factor)
 {
+    input = sanitizeAudioSample(input);
+
     if (factor <= 1)
         return input;
     
@@ -208,6 +236,9 @@ float HarshNoiseAudioProcessor::downsample(float input, int channel, int factor)
 
 float HarshNoiseAudioProcessor::waveshape(float input, float drive)
 {
+    input = sanitizeAudioSample(input);
+    drive = std::clamp(std::isfinite(drive) ? drive : 0.0f, 0.0f, 1.0f);
+
     // Multi-stage aggressive waveshaping
     float x = input * (1.0f + drive * 10.0f);
     
@@ -217,12 +248,8 @@ float HarshNoiseAudioProcessor::waveshape(float input, float drive)
     if (x < -0.5f)
         x = -0.5f + (x + 0.5f) * 0.05f;
     
-    // Stage 2: Wrap-around distortion (creates harmonics)
-    while (std::abs(x) > 1.0f)
-    {
-        if (x > 1.0f) x = 2.0f - x;
-        else if (x < -1.0f) x = -2.0f - x;
-    }
+    // Stage 2: bounded triangle folding, replacing the old unbounded loop.
+    x = foldToUnitRange(x);
     
     // Stage 3: Add harsh harmonics via triangle wave folding
     if (drive > 0.3f)
@@ -243,17 +270,17 @@ float HarshNoiseAudioProcessor::updateChaos()
     const float beta = 8.0f / 3.0f;
     const float dt = 0.001f;
     
-    float x = chaosState[0];
-    float y = chaosState[1];
-    float z = chaosState[2];
+    float x = sanitizeAudioSample(chaosState[0]);
+    float y = sanitizeAudioSample(chaosState[1]);
+    float z = sanitizeAudioSample(chaosState[2]);
     
     float dx = sigma * (y - x);
     float dy = x * (rho - z) - y;
     float dz = x * y - beta * z;
     
-    chaosState[0] = x + dx * dt;
-    chaosState[1] = y + dy * dt;
-    chaosState[2] = z + dz * dt;
+    chaosState[0] = sanitizeAudioSample(x + dx * dt);
+    chaosState[1] = sanitizeAudioSample(y + dy * dt);
+    chaosState[2] = sanitizeAudioSample(z + dz * dt);
     
     // Normalize output to -1..1 range
     return std::tanh(chaosState[0] * 0.1f);
@@ -261,6 +288,9 @@ float HarshNoiseAudioProcessor::updateChaos()
 
 float HarshNoiseAudioProcessor::glitchProcess(float input, float chaosAmount)
 {
+    input = sanitizeAudioSample(input);
+    chaosAmount = std::clamp(std::isfinite(chaosAmount) ? chaosAmount : 0.0f, 0.0f, 1.0f);
+
     if (chaosAmount < 0.01f)
         return input;
     
@@ -311,7 +341,7 @@ float HarshNoiseAudioProcessor::glitchProcess(float input, float chaosAmount)
         }
         
         // Mix glitched signal
-        return input * (1.0f - chaosAmount * 0.7f) + glitched * chaosAmount * 0.7f;
+        return sanitizeAudioSample(input * (1.0f - chaosAmount * 0.7f) + glitched * chaosAmount * 0.7f);
     }
     
     return input;
@@ -319,6 +349,10 @@ float HarshNoiseAudioProcessor::glitchProcess(float input, float chaosAmount)
 
 float HarshNoiseAudioProcessor::processFeedback(float input, int channel, float fbAmount, float chaosAmount)
 {
+    input = sanitizeAudioSample(input);
+    fbAmount = std::clamp(std::isfinite(fbAmount) ? fbAmount : 0.0f, 0.0f, 1.5f);
+    chaosAmount = std::clamp(std::isfinite(chaosAmount) ? chaosAmount : 0.0f, 0.0f, 1.0f);
+
     if (fbAmount < 0.01f)
         return input;
     
@@ -335,7 +369,7 @@ float HarshNoiseAudioProcessor::processFeedback(float input, int channel, float 
     int readPos = (delayWritePos - delayTime + MAX_DELAY) % MAX_DELAY;
     
     auto& delayBuffer = (channel == 0) ? delayBufferL : delayBufferR;
-    float delayed = delayBuffer[readPos];
+    float delayed = sanitizeAudioSample(delayBuffer[readPos]);
     
     // Aggressive feedback with soft saturation
     float fb = delayed * fbAmount;
@@ -361,10 +395,12 @@ float HarshNoiseAudioProcessor::processFeedback(float input, int channel, float 
 
 float HarshNoiseAudioProcessor::dcBlock(float input, int channel)
 {
+    input = sanitizeAudioSample(input);
+
     // High-pass filter to remove DC offset
     // y[n] = x[n] - x[n-1] + R * y[n-1], R close to 1
     const float R = 0.995f;
-    float output = input - dcIn[channel] + R * dcOut[channel];
+    float output = sanitizeAudioSample(input - sanitizeAudioSample(dcIn[channel]) + R * sanitizeAudioSample(dcOut[channel]));
     dcIn[channel] = input;
     dcOut[channel] = output;
     return output;
@@ -372,6 +408,8 @@ float HarshNoiseAudioProcessor::dcBlock(float input, int channel)
 
 float HarshNoiseAudioProcessor::softClip(float input)
 {
+    input = sanitizeAudioSample(input);
+
     // Final soft clipper / limiter
     return std::tanh(input * 1.5f) * 0.8f;
 }
@@ -408,7 +446,7 @@ void HarshNoiseAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, ju
     {
         for (int channel = 0; channel < numChannels; ++channel)
         {
-            float dry = buffer.getSample(channel, sample);
+            float dry = sanitizeAudioSample(buffer.getSample(channel, sample));
             float wet = dry;
             
             // 1. Bit crushing (quantization noise)
@@ -446,7 +484,7 @@ void HarshNoiseAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, ju
             // Update peak level for metering
             peakLevel = std::max(peakLevel, std::abs(output));
             
-            buffer.setSample(channel, sample, output);
+            buffer.setSample(channel, sample, sanitizeAudioSample(output));
         }
         
         // Advance delay write position
