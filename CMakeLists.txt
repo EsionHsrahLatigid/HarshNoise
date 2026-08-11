@@ -30,51 +30,47 @@ if(HARSHNOISE_BUILD_PLUGIN)
         list(APPEND HARSHNOISE_FORMATS AU)
     endif()
 
-juce_add_plugin(HarshNoise
-    VERSION ${PROJECT_VERSION}
-    COMPANY_NAME "EsionHsrahLatigid"
-    BUNDLE_ID "jp.ehl.harshnoise"
-    PRODUCT_NAME "HarshNoise"
-    DESCRIPTION "Brutal digital harsh noise generator"
-    IS_SYNTH FALSE
-    NEEDS_MIDI_INPUT FALSE
-    NEEDS_MIDI_OUTPUT FALSE
-    IS_MIDI_EFFECT FALSE
-    EDITOR_WANTS_KEYBOARD_FOCUS FALSE
-    COPY_PLUGIN_AFTER_BUILD FALSE
-    PLUGIN_MANUFACTURER_CODE EHL_
-    PLUGIN_CODE Hrsh
-    FORMATS ${HARSHNOISE_FORMATS}
-    VST3_CATEGORIES "Fx" "Distortion"
-    AU_MAIN_TYPE "kAudioUnitType_Effect"
-)
+    juce_add_plugin(HarshNoise
+        VERSION ${PROJECT_VERSION}
+        COMPANY_NAME "EsionHsrahLatigid"
+        BUNDLE_ID "jp.ehl.harshnoise"
+        PRODUCT_NAME "HarshNoise"
+        DESCRIPTION "Brutal digital harsh noise generator"
+        IS_SYNTH FALSE
+        NEEDS_MIDI_INPUT FALSE
+        NEEDS_MIDI_OUTPUT FALSE
+        IS_MIDI_EFFECT FALSE
+        EDITOR_WANTS_KEYBOARD_FOCUS FALSE
+        COPY_PLUGIN_AFTER_BUILD FALSE
+        PLUGIN_MANUFACTURER_CODE EHL_
+        PLUGIN_CODE Hrsh
+        FORMATS ${HARSHNOISE_FORMATS}
+        VST3_CATEGORIES "Fx" "Distortion"
+        AU_MAIN_TYPE "kAudioUnitType_Effect")
 
-juce_generate_juce_header(HarshNoise)
+    juce_generate_juce_header(HarshNoise)
 
-target_sources(HarshNoise
-    PRIVATE
-        src/PluginEditor.cpp
-        src/PluginEditor.h
-        src/PluginProcessor.cpp
-        src/PluginProcessor.h)
+    target_sources(HarshNoise
+        PRIVATE
+            src/PluginEditor.cpp
+            src/PluginEditor.h
+            src/PluginProcessor.cpp
+            src/PluginProcessor.h)
 
-target_compile_definitions(HarshNoise
-    PUBLIC
-        JUCE_WEB_BROWSER=0
-        JUCE_USE_CURL=0
-        JUCE_VST3_CAN_REPLACE_VST2=0
-        JUCE_DISPLAY_SPLASH_SCREEN=0
-)
+    target_compile_definitions(HarshNoise
+        PUBLIC
+            JUCE_WEB_BROWSER=0
+            JUCE_USE_CURL=0
+            JUCE_VST3_CAN_REPLACE_VST2=0)
 
-target_link_libraries(HarshNoise
-    PRIVATE
-        juce::juce_audio_utils
-        juce::juce_dsp
-    PUBLIC
-        juce::juce_recommended_config_flags
-        juce::juce_recommended_lto_flags
-        juce::juce_recommended_warning_flags
-)
+    target_link_libraries(HarshNoise
+        PRIVATE
+            juce::juce_audio_utils
+            juce::juce_dsp
+        PUBLIC
+            juce::juce_recommended_config_flags
+            juce::juce_recommended_lto_flags
+            juce::juce_recommended_warning_flags)
 
     set(harshnoise_juce_products "${CMAKE_CURRENT_BINARY_DIR}/HarshNoise_artefacts/$<CONFIG>")
     set(harshnoise_staged_products "${HARSHNOISE_ARTIFACT_DIR}/$<CONFIG>")
