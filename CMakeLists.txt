@@ -192,6 +192,7 @@ if(HARSHNOISE_BUILD_PLUGIN)
         add_test(
             NAME HarshNoiseArtifactChecks
             COMMAND ${CMAKE_COMMAND}
+                    -DBUILD_CONFIG=$<CONFIG>
                     -DHARSHNOISE_STAGED_DIR=${HARSHNOISE_ARTIFACT_DIR}/$<CONFIG>
                     -DHARSHNOISE_EXPECT_AU=$<BOOL:${APPLE}>
                     -DPython3_EXECUTABLE=${Python3_EXECUTABLE}
