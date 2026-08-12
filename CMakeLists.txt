@@ -10,12 +10,18 @@ option(HARSHNOISE_BUILD_PLUGIN "Build the JUCE plug-in targets" ON)
 option(HARSHNOISE_BUILD_TESTS "Build plug-in smoke tests" ON)
 set(HARSHNOISE_ARTIFACT_DIR "${CMAKE_CURRENT_SOURCE_DIR}/artifacts" CACHE PATH
     "Directory for final VST3, AU, and Standalone products")
+set(EHL_JUCE_SOURCE_DIR "" CACHE PATH "Existing JUCE source checkout; avoids network when set")
 
 if(HARSHNOISE_BUILD_PLUGIN)
     include(FetchContent)
     find_package(Python3 COMPONENTS Interpreter REQUIRED)
 
-    if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/JUCE/CMakeLists.txt")
+    if(EHL_JUCE_SOURCE_DIR)
+        if(NOT EXISTS "${EHL_JUCE_SOURCE_DIR}/CMakeLists.txt")
+            message(FATAL_ERROR "EHL_JUCE_SOURCE_DIR does not contain JUCE: ${EHL_JUCE_SOURCE_DIR}")
+        endif()
+        add_subdirectory("${EHL_JUCE_SOURCE_DIR}" "${CMAKE_CURRENT_BINARY_DIR}/juce")
+    elseif(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/JUCE/CMakeLists.txt")
         add_subdirectory(JUCE)
     else()
         FetchContent_Declare(
@@ -25,6 +31,7 @@ if(HARSHNOISE_BUILD_PLUGIN)
             GIT_SHALLOW TRUE)
         FetchContent_MakeAvailable(JUCE)
     endif()
+    add_subdirectory(modules/juce-ehl-design-module)
 
     set(HARSHNOISE_FORMATS VST3 Standalone)
     if(APPLE)
@@ -41,7 +48,7 @@ if(HARSHNOISE_BUILD_PLUGIN)
         NEEDS_MIDI_INPUT FALSE
         NEEDS_MIDI_OUTPUT FALSE
         IS_MIDI_EFFECT FALSE
-        EDITOR_WANTS_KEYBOARD_FOCUS FALSE
+        EDITOR_WANTS_KEYBOARD_FOCUS TRUE
         COPY_PLUGIN_AFTER_BUILD FALSE
         PLUGIN_MANUFACTURER_CODE EHL_
         PLUGIN_CODE Hrsh
@@ -68,6 +75,7 @@ if(HARSHNOISE_BUILD_PLUGIN)
         PRIVATE
             juce::juce_audio_utils
             juce::juce_dsp
+            EHL::JuceDesign
         PUBLIC
             juce::juce_recommended_config_flags
             juce::juce_recommended_lto_flags
@@ -113,6 +121,56 @@ if(HARSHNOISE_BUILD_PLUGIN)
         ${harshnoise_artifact_commands}
         DEPENDS ${harshnoise_artifact_dependencies}
         COMMENT "Staging HarshNoise products in ${HARSHNOISE_ARTIFACT_DIR}/$<CONFIG>")
+    set(ehl_stage_platform "linux-x64")
+    if(APPLE)
+        set(ehl_stage_platform "macos-arm64")
+    elseif(WIN32)
+        set(ehl_stage_platform "windows-x64")
+    endif()
+    set(ehl_stage_source_products "${HARSHNOISE_ARTIFACT_DIR}/$<CONFIG>")
+    set(ehl_staged_products "${HARSHNOISE_ARTIFACT_DIR}/plugin-release/${ehl_stage_platform}")
+
+    set(ehl_stage_commands
+        COMMAND ${CMAKE_COMMAND} -E make_directory "${ehl_staged_products}/vst3"
+        COMMAND ${CMAKE_COMMAND} -E make_directory "${ehl_staged_products}/standalone"
+        COMMAND ${CMAKE_COMMAND} -E make_directory "${ehl_staged_products}/au")
+
+    if(APPLE)
+        list(APPEND ehl_stage_commands
+            COMMAND ${CMAKE_COMMAND} -E rm -rf "${ehl_staged_products}/vst3/harshnoise_vst3_plugin.vst3"
+            COMMAND ${CMAKE_COMMAND} -E rm -rf "${ehl_staged_products}/standalone/harshnoise_standalone_plugin.app"
+            COMMAND ${CMAKE_COMMAND} -E rm -rf "${ehl_staged_products}/au/harshnoise_au_plugin.component"
+            COMMAND ${CMAKE_COMMAND} -E copy_directory "${ehl_stage_source_products}/VST3/HarshNoise.vst3" "${ehl_staged_products}/vst3/harshnoise_vst3_plugin.vst3"
+            COMMAND ${CMAKE_COMMAND} -E copy_directory "${ehl_stage_source_products}/Standalone/HarshNoise.app" "${ehl_staged_products}/standalone/harshnoise_standalone_plugin.app"
+            COMMAND ${CMAKE_COMMAND} -E copy_directory "${ehl_stage_source_products}/AU/HarshNoise.component" "${ehl_staged_products}/au/harshnoise_au_plugin.component")
+    elseif(WIN32)
+        list(APPEND ehl_stage_commands
+            COMMAND ${CMAKE_COMMAND} -E rm -rf "${ehl_staged_products}/vst3/harshnoise_vst3_plugin.vst3"
+            COMMAND ${CMAKE_COMMAND} -E rm -f "${ehl_staged_products}/standalone/harshnoise_standalone_plugin.exe"
+            COMMAND ${CMAKE_COMMAND} -E copy_directory "${ehl_stage_source_products}/VST3/HarshNoise.vst3" "${ehl_staged_products}/vst3/harshnoise_vst3_plugin.vst3"
+            COMMAND ${CMAKE_COMMAND} -E copy "${ehl_stage_source_products}/Standalone/HarshNoise.exe" "${ehl_staged_products}/standalone/harshnoise_standalone_plugin.exe")
+    else()
+        list(APPEND ehl_stage_commands
+            COMMAND ${CMAKE_COMMAND} -E rm -rf "${ehl_staged_products}/vst3/harshnoise_vst3_plugin.vst3"
+            COMMAND ${CMAKE_COMMAND} -E rm -f "${ehl_staged_products}/standalone/harshnoise_standalone_plugin"
+            COMMAND ${CMAKE_COMMAND} -E copy_directory "${ehl_stage_source_products}/VST3/HarshNoise.vst3" "${ehl_staged_products}/vst3/harshnoise_vst3_plugin.vst3"
+            COMMAND ${CMAKE_COMMAND} -E copy "${ehl_stage_source_products}/Standalone/HarshNoise" "${ehl_staged_products}/standalone/harshnoise_standalone_plugin")
+    endif()
+
+    list(APPEND ehl_stage_commands
+        COMMAND ${CMAKE_COMMAND}
+            -DPRODUCT_NAME=HarshNoise
+            -DSLUG=harshnoise
+            -DBUNDLE_ID=jp.ehl.harshnoise
+            -DPLUGIN_CODE=Hrsh
+            -DSTAGE_DIR=${ehl_staged_products}
+            -P "${CMAKE_CURRENT_SOURCE_DIR}/cmake/WriteArtifactsManifest.cmake")
+
+    add_custom_target(ehl_stage_products
+        ${ehl_stage_commands}
+        DEPENDS HarshNoise_Artifacts
+        COMMENT "Staging HarshNoise CI release products under ${HARSHNOISE_ARTIFACT_DIR}/plugin-release")
+
 
     if(HARSHNOISE_BUILD_TESTS)
         enable_testing()
@@ -124,6 +182,13 @@ if(HARSHNOISE_BUILD_PLUGIN)
         target_link_libraries(HarshNoiseSmokeTests PRIVATE HarshNoise juce::juce_audio_utils)
         add_dependencies(HarshNoiseSmokeTests HarshNoise_Artifacts)
         add_test(NAME HarshNoiseSmokeTests COMMAND HarshNoiseSmokeTests)
+        add_executable(HarshNoiseEditorTests Tests/EditorTests.cpp)
+        target_include_directories(HarshNoiseEditorTests
+            PRIVATE
+                src
+                "${CMAKE_CURRENT_BINARY_DIR}/HarshNoise_artefacts/JuceLibraryCode")
+        target_link_libraries(HarshNoiseEditorTests PRIVATE HarshNoise EHL::JuceDesign juce::juce_audio_utils)
+        add_test(NAME HarshNoiseEditorTests COMMAND HarshNoiseEditorTests)
         add_test(
             NAME HarshNoiseArtifactChecks
             COMMAND ${CMAKE_COMMAND}

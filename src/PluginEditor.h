@@ -1,15 +1,13 @@
 #pragma once
 
-#include <JuceHeader.h>
 #include "PluginProcessor.h"
 
-//==============================================================================
-/**
- * HarshNoise Editor - Brutalist minimal UI
- * 
- * Inspired by early 2000s experimental software aesthetics
- * Dark theme with aggressive red accents
- */
+#include <ehl/juce_design/EhlDesign.h>
+#include <JuceHeader.h>
+
+#include <array>
+#include <memory>
+
 class HarshNoiseAudioProcessorEditor : public juce::AudioProcessorEditor,
                                         private juce::Timer
 {
@@ -17,58 +15,31 @@ public:
     explicit HarshNoiseAudioProcessorEditor(HarshNoiseAudioProcessor&);
     ~HarshNoiseAudioProcessorEditor() override;
 
-    //==============================================================================
     void paint(juce::Graphics&) override;
     void resized() override;
+    juce::String getTooltip() { return tooltipText; }
+
+    static constexpr int defaultWidth = ehl::juce_design::Metrics::defaultWidth;
+    static constexpr int defaultHeight = ehl::juce_design::Metrics::defaultHeight;
+    static constexpr int minimumWidth = ehl::juce_design::Metrics::minimumWidth;
+    static constexpr int minimumHeight = ehl::juce_design::Metrics::minimumHeight;
 
 private:
+    using SliderAttachment = juce::AudioProcessorValueTreeState::SliderAttachment;
+
+    void addControl(int index, const juce::String& parameterId, const juce::String& labelText, const juce::String& tip);
     void timerCallback() override;
-    
-    // Custom slider look
-    class BrutalLookAndFeel : public juce::LookAndFeel_V4
-    {
-    public:
-        BrutalLookAndFeel();
-        
-        void drawRotarySlider(juce::Graphics& g, int x, int y, int width, int height,
-                              float sliderPosProportional, float rotaryStartAngle,
-                              float rotaryEndAngle, juce::Slider& slider) override;
-        
-        void drawLabel(juce::Graphics& g, juce::Label& label) override;
-    };
+    void updateParameterDisplay();
     
     HarshNoiseAudioProcessor& audioProcessor;
-    BrutalLookAndFeel brutalLookAndFeel;
-    
-    // Parameter controls
-    juce::Slider crushSlider;
-    juce::Slider downsampleSlider;
-    juce::Slider feedbackSlider;
-    juce::Slider chaosSlider;
-    juce::Slider mixSlider;
-    juce::Slider outputSlider;
-    
-    juce::Label crushLabel;
-    juce::Label downsampleLabel;
-    juce::Label feedbackLabel;
-    juce::Label chaosLabel;
-    juce::Label mixLabel;
-    juce::Label outputLabel;
-    
-    // Attachments
-    std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> crushAttachment;
-    std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> downsampleAttachment;
-    std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> feedbackAttachment;
-    std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> chaosAttachment;
-    std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> mixAttachment;
-    std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> outputAttachment;
-    
-    // Metering
-    float meterLevel = 0.0f;
-    
-    // Glitch animation state
-    int glitchFrame = 0;
-    bool isGlitching = false;
+    ehl::juce_design::LookAndFeel lookAndFeel;
+    ehl::juce_design::ParameterDisplay parameterDisplay { ehl::juce_design::DisplayKind::distortion };
+    juce::TooltipWindow tooltipWindow { this, 700 };
+    juce::String tooltipText;
+
+    std::array<juce::Slider, 6> sliders;
+    std::array<juce::Label, 6> labels;
+    std::array<std::unique_ptr<SliderAttachment>, 6> attachments;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(HarshNoiseAudioProcessorEditor)
 };
