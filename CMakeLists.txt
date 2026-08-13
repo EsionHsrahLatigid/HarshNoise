@@ -8,6 +8,13 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 
 option(HARSHNOISE_BUILD_PLUGIN "Build the JUCE plug-in targets" ON)
 option(HARSHNOISE_BUILD_TESTS "Build plug-in smoke tests" ON)
+set(EHL_COPY_PLUGIN_AFTER_BUILD_DEFAULT OFF)
+if(APPLE AND NOT DEFINED ENV{CI})
+    set(EHL_COPY_PLUGIN_AFTER_BUILD_DEFAULT ON)
+endif()
+option(EHL_COPY_PLUGIN_AFTER_BUILD
+    "Copy built plug-in formats to the current user's standard plug-in folders"
+    ${EHL_COPY_PLUGIN_AFTER_BUILD_DEFAULT})
 set(HARSHNOISE_ARTIFACT_DIR "${CMAKE_CURRENT_SOURCE_DIR}/artifacts" CACHE PATH
     "Directory for final VST3, AU, and Standalone products")
 set(EHL_JUCE_SOURCE_DIR "" CACHE PATH "Existing JUCE source checkout; avoids network when set")
@@ -38,6 +45,14 @@ if(HARSHNOISE_BUILD_PLUGIN)
         list(APPEND HARSHNOISE_FORMATS AU)
     endif()
 
+    set(EHL_PLUGIN_COPY_ARGS
+        COPY_PLUGIN_AFTER_BUILD ${EHL_COPY_PLUGIN_AFTER_BUILD})
+    if(APPLE)
+        list(APPEND EHL_PLUGIN_COPY_ARGS
+            VST3_COPY_DIR "$ENV{HOME}/Library/Audio/Plug-Ins/VST3"
+            AU_COPY_DIR "$ENV{HOME}/Library/Audio/Plug-Ins/Components")
+    endif()
+
     juce_add_plugin(HarshNoise
         VERSION ${PROJECT_VERSION}
         COMPANY_NAME "EsionHsrahLatigid"
@@ -49,7 +64,7 @@ if(HARSHNOISE_BUILD_PLUGIN)
         NEEDS_MIDI_OUTPUT FALSE
         IS_MIDI_EFFECT FALSE
         EDITOR_WANTS_KEYBOARD_FOCUS TRUE
-        COPY_PLUGIN_AFTER_BUILD FALSE
+        ${EHL_PLUGIN_COPY_ARGS}
         PLUGIN_MANUFACTURER_CODE EHL_
         PLUGIN_CODE Hrsh
         FORMATS ${HARSHNOISE_FORMATS}
