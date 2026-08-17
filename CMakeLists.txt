@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.22)
 
-project(HarshNoise VERSION 1.0.0 LANGUAGES C CXX)
+project(HarshNoise VERSION 1.0.1 LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -58,7 +58,7 @@ if(HARSHNOISE_BUILD_PLUGIN)
         COMPANY_NAME "EsionHsrahLatigid"
         BUNDLE_ID "jp.ehl.harshnoise"
         PRODUCT_NAME "HarshNoise"
-        DESCRIPTION "Brutal digital harsh noise generator"
+        DESCRIPTION "Bit-crushed decimation feedback processor"
         IS_SYNTH FALSE
         NEEDS_MIDI_INPUT FALSE
         NEEDS_MIDI_OUTPUT FALSE

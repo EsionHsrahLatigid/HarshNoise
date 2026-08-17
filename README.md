@@ -1,6 +1,6 @@
 # HarshNoise
 
-Brutal digital harsh-noise generator plug-in for VST3, AU, and Standalone hosts.
+Bit-crushed decimation feedback plug-in for VST3, AU, and Standalone hosts.
 
 HarshNoise combines bit crushing, sample-rate decimation, aggressive feedback,
 chaotic modulation, and stutter-style glitching for destructive digital noise
